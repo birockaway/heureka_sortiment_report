@@ -8,6 +8,7 @@ import shutil
 import logging_gelf.formatters
 import logging_gelf.handlers
 from selenium import webdriver
+from selenium.webdriver import FirefoxOptions
 from selenium.common.exceptions import NoSuchElementException
 from keboola import docker
 
@@ -15,7 +16,7 @@ from keboola import docker
 @contextmanager
 def browser_handler(browserdriver):
     try:
-        yield webdriver
+        yield browserdriver
     except Exception as e:
         logging.error(f"Exception: {e}")
     finally:
@@ -96,7 +97,9 @@ for shop in shops_list:
     os.makedirs(download_path, exist_ok=True)
 
     profile = setup_browser_profile(webdriver.FirefoxProfile(), download_path)
-    driver = webdriver.Firefox(firefox_profile=profile)
+    opts = FirefoxOptions()
+    opts.add_argument("--headless")
+    driver = webdriver.Firefox(firefox_profile=profile, options=opts)
 
     with browser_handler(driver) as browser:
         logging.info(f"Going to {login_url}")
@@ -116,6 +119,7 @@ for shop in shops_list:
         # wait for download button to be accessible
         time.sleep(2)
         logger.info("Clicking download.")
+        driver.set_window_size(1280, 1024)
         latest_csv_download_button.click()
         browser.switch_to.alert.accept()
 
