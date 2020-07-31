@@ -10,10 +10,10 @@ RUN apt-get update && apt-get install -y \
     xvfb
 
 # Firefox browser to run the tests
-RUN apt-get install -y firefox wget
+RUN apt-get install -y firefox-esr
 
 # Gecko Driver
-ENV GECKODRIVER_VERSION 0.26.0
+ENV GECKODRIVER_VERSION 0.20.1
 RUN wget --no-verbose -O /tmp/geckodriver.tar.gz https://github.com/mozilla/geckodriver/releases/download/v$GECKODRIVER_VERSION/geckodriver-v$GECKODRIVER_VERSION-linux64.tar.gz \
   && rm -rf /opt/geckodriver \
   && tar -C /opt -zxf /tmp/geckodriver.tar.gz \
