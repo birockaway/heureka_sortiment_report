@@ -80,6 +80,8 @@ conf = docker.Config(datadir)
 
 params = conf.get_parameters()
 
+logger.info("Extracted parameters.")
+
 shops_list = list(params.keys())
 
 for shop in shops_list:
