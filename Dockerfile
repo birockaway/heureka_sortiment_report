@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
     xvfb
 
 # Firefox browser to run the tests
-RUN apt-get install -y firefox-esr==68.3.0
+RUN apt-get install -y firefox-esr=68.3.0
 
 # Gecko Driver
 ENV GECKODRIVER_VERSION 0.26.0
