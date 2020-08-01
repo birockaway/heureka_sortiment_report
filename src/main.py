@@ -17,8 +17,6 @@ from keboola import docker
 def browser_handler(browserdriver):
     try:
         yield browserdriver
-    except Exception as e:
-        logging.error(f"Exception: {e}")
     finally:
         browserdriver.quit()
 
@@ -31,11 +29,11 @@ def setup_browser_profile(browser_profile, download_files_path):
     return browser_profile
 
 
-def login(webbrowser):
+def login(webbrowser, email, passphrase):
     name_field = webbrowser.find_element_by_id("frm-loginForm-loginForm-email")
-    name_field.send_keys(username)
+    name_field.send_keys(email)
     pass_field = webbrowser.find_element_by_id("frm-loginForm-loginForm-password")
-    pass_field.send_keys(password)
+    pass_field.send_keys(passphrase)
     login_button = webbrowser.find_element_by_xpath(
         '//*[@id="frm-loginForm-loginForm"]/fieldset/footer/button'
     )
@@ -48,11 +46,12 @@ def generate_new_sortiment_report(webbrowser):
             '//*[@id="right"]/table[1]/tbody/tr[2]/td[3]/button'
         )
         generate_report_button.click()
-        webbrowser.switch_to.alert.accept()
     except NoSuchElementException:
         logger.error(
             "Generate report button is not visible. It might have been clicked recently."
         )
+    else:
+        webbrowser.switch_to.alert.accept()
 
 
 logging.basicConfig(
@@ -106,7 +105,7 @@ for shop in shops_list:
         browser.get(login_url)
 
         logger.info("Logging in.")
-        login(browser)
+        login(browser, email=username, passphrase=password)
 
         logger.info("Going to sortiment report page.")
         browser.get(sortiment_report_url)
@@ -116,12 +115,12 @@ for shop in shops_list:
         latest_csv_download_button = browser.find_element_by_xpath(
             '//*[@id="right"]/table[2]/tbody/tr[2]/td[3]/a[2]'
         )
+        logger.info("Clicking download.")
+        # without resizing, the button is not accessible in headless mode
+        browser.set_window_size(1280, 1024)
         # wait for download button to be accessible
         time.sleep(2)
-        logger.info("Clicking download.")
-        driver.set_window_size(1280, 1024)
         latest_csv_download_button.click()
-        browser.switch_to.alert.accept()
 
     for file in os.listdir(download_path):
         logger.info(f"Processing file {file}")
