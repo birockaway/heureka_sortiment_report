@@ -43,6 +43,7 @@ ENV PYTHONUNBUFFERED=1
 COPY . code/
 
 WORKDIR /code/
+RUN chmod 777 /data/log/geckodriver.log
 
 CMD tail -f /dev/null
 CMD ["python3", "-u", "src/main.py"]
