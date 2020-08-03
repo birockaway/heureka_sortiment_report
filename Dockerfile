@@ -41,6 +41,7 @@ RUN pip3 install selenium
 RUN pip3 install pyvirtualdisplay
 # install keboola docker library
 RUN pip3 install https://github.com/keboola/python-docker-application/zipball/master
+RUN pip3 install -r /code/requirements.txt
 
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
