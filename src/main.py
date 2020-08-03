@@ -17,6 +17,8 @@ from keboola import docker
 def browser_handler(browserdriver):
     try:
         yield browserdriver
+    except NoSuchElementException as e:
+        logging.error(f'Exception: {e}')
     finally:
         browserdriver.quit()
 
@@ -120,12 +122,13 @@ for shop in shops_list:
         # wait for download button to be accessible
         time.sleep(2)
         latest_csv_download_button.click()
+        time.sleep(2)
 
     for file in os.listdir(download_path):
         logger.info(f"Processing file {file}")
         result_file_existed = os.path.isfile(results_path)
         with open(f"{download_path}{file}", "r") as infile, open(
-            results_path, "a+"
+                results_path, "a+"
         ) as outfile:
             dict_reader = csv.DictReader(infile)
             dict_writer = csv.DictWriter(
