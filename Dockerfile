@@ -46,9 +46,10 @@ ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 ENV PYTHONUNBUFFERED=1
 
-WORKDIR /code/
 
 COPY . code/
 
+WORKDIR /code/
+
 CMD tail -f /dev/null
-CMD ["python3", "-u", "/code/src/main.py"]
+CMD ["python3", "-u", "src/main.py"]
