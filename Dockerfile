@@ -1,4 +1,4 @@
-FROM ubuntu:bionic
+FROM quay.io/keboola/docker-custom-python:latest
 
 ENV PYTHONIOENCODING utf-8
 
@@ -32,7 +32,6 @@ RUN FIREFOX_SETUP=firefox-setup.tar.bz2 && \
 RUN pip3 install selenium
 RUN pip3 install pyvirtualdisplay
 # install keboola docker library
-RUN pip3 install https://github.com/keboola/python-docker-application/zipball/master
 RUN pip3 install -r /code/requirements.txt
 
 ENV LANG C.UTF-8
@@ -42,9 +41,7 @@ ENV PYTHONUNBUFFERED=1
 
 COPY . code/
 
-WORKDIR /code/
-RUN touch /data/log/geckodriver.log
-RUN chmod 777 /data/log/geckodriver.log
+WORKDIR /data/
 
 CMD tail -f /dev/null
 CMD ["python3", "-u", "src/main.py"]
