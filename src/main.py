@@ -75,6 +75,7 @@ logger.addHandler(logging_gelf_handler)
 logger.setLevel(logging.INFO)
 
 OUTCOLS = ["material", "country", "distrchan", "source", "cse_id", "category_name"]
+version = os.getenv("VERSION_TAG")
 datadir = os.getenv("KBC_DATADIR", "/data/")
 download_path = f"{datadir}in/files/"
 results_path = f'{os.getenv("KBC_DATADIR")}out/tables/results.csv'
@@ -82,6 +83,7 @@ conf = docker.Config(datadir)
 
 params = conf.get_parameters()
 logger.info("Extracted parameters.")
+logger.info(f"Version: {version}")
 
 shops_list = list(params.keys())
 

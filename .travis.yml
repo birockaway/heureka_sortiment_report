@@ -13,7 +13,7 @@ after_success:
 deploy:
   provider: script
   skip_cleanup: true
-  script: bash deploy.sh
+  script: VERSION_TAG=`git describe --tags` && bash deploy.sh
   on:
     branch: master
     tags: true

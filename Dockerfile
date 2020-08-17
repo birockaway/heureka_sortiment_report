@@ -43,4 +43,4 @@ COPY . code/
 WORKDIR /data/
 
 CMD tail -f /dev/null
-CMD ["python3", "-u", "src/main.py"]
+CMD ["python3", "-u", "/code/src/main.py"]
