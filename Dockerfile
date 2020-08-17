@@ -40,5 +40,8 @@ COPY . code/
 
 WORKDIR /data/
 
+# set display port to avoid crash
+ENV DISPLAY=:99
+
 CMD tail -f /dev/null
 CMD ["python3", "-u", "/code/src/main.py"]
