@@ -27,8 +27,6 @@ RUN FIREFOX_SETUP=firefox-setup.tar.bz2 && \
     ln -s /opt/firefox/firefox /usr/bin/firefox && \
     rm $FIREFOX_SETUP
 
-RUN VERSION_TAG=bash git describe --tags
-
 RUN pip3 install selenium
 RUN pip3 install pyvirtualdisplay
 RUN pip3 install -r /code/requirements.txt
