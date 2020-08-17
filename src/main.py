@@ -99,7 +99,8 @@ for shop in shops_list:
     profile = setup_browser_profile(webdriver.FirefoxProfile(), download_path)
     opts = FirefoxOptions()
     opts.add_argument("--headless")
-    driver = webdriver.Firefox(firefox_profile=profile, options=opts, log_path=f'{datadir}log/geckodriver.log')
+    driver = webdriver.Firefox(firefox_profile=profile, options=opts, log_path=f'{datadir}log/geckodriver.log',
+                               executable_path='/usr/local/bin/geckodriver')
 
     with browser_handler(driver) as browser:
         logging.info(f"Going to {login_url}")

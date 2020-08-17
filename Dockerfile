@@ -31,7 +31,6 @@ RUN FIREFOX_SETUP=firefox-setup.tar.bz2 && \
 
 RUN pip3 install selenium
 RUN pip3 install pyvirtualdisplay
-# install keboola docker library
 RUN pip3 install -r /code/requirements.txt
 
 ENV LANG C.UTF-8
