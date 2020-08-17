@@ -18,7 +18,7 @@ def browser_handler(browserdriver):
     try:
         yield browserdriver
     except NoSuchElementException as e:
-        logging.error(f'Exception: {e}')
+        logging.error(f"Exception: {e}")
     finally:
         browserdriver.quit()
 
@@ -101,8 +101,12 @@ for shop in shops_list:
     profile = setup_browser_profile(webdriver.FirefoxProfile(), download_path)
     opts = FirefoxOptions()
     opts.add_argument("--headless")
-    driver = webdriver.Firefox(firefox_profile=profile, options=opts, log_path=f'{datadir}log/geckodriver.log',
-                               executable_path='/usr/local/bin/geckodriver')
+    driver = webdriver.Firefox(
+        firefox_profile=profile,
+        options=opts,
+        service_log_path=f"{datadir}out/files/geckodriver.log",
+        executable_path="/usr/local/bin/geckodriver",
+    )
 
     with browser_handler(driver) as browser:
         logging.info(f"Going to {login_url}")
@@ -131,7 +135,7 @@ for shop in shops_list:
         logger.info(f"Processing file {file}")
         result_file_existed = os.path.isfile(results_path)
         with open(f"{download_path}{file}", "r") as infile, open(
-                results_path, "a+"
+            results_path, "a+"
         ) as outfile:
             dict_reader = csv.DictReader(infile)
             dict_writer = csv.DictWriter(
