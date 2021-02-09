@@ -1,164 +1,162 @@
 """
-
+Launches generations of heureka sortiment report if one was not launched in the last hour.
+Downloads las available sortiment report and writes to csvs as specified in config.
 """
-
+import html
 import logging
 import os
-import time
-import csv
-from contextlib import contextmanager
-import shutil
+import re
+from csv import DictReader, DictWriter
+from datetime import datetime
 
+import requests
 import logging_gelf.formatters
 import logging_gelf.handlers
-from selenium import webdriver
-from selenium.webdriver import FirefoxOptions
-from selenium.common.exceptions import NoSuchElementException
 from keboola import docker
+from bs4 import BeautifulSoup
 
 
-@contextmanager
-def browser_handler(browserdriver):
+def extract_tag(input_string):
+    input_name = re.search('<input name="([a-z])"', input_string).group(1)
+    value = re.search(' value="((.*?)+)"', input_string).group(1)
+    return input_name, value
+
+
+def extract_report_url_dict(text):
+    url_dict = dict()
+    for part in text:
+        if re.match("<input name", str(part)) is not None:
+            k, v = extract_tag(str(part))
+            url_dict[k] = v
+    return url_dict
+
+
+def check_report_generation(text):
+    se = re.sub("<td>|</td>", "", str(text))
     try:
-        yield browserdriver
-    except NoSuchElementException as e:
-        logging.error(f"Exception: {e}")
-    finally:
-        browserdriver.quit()
+        last_dt = datetime.strptime(se, "%d.%m.%Y %H:%M:%S").strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+        logging.info(
+            f"Current report started generating at: {last_dt}. Cannot generate new now."
+        )
+        return True
+    except ValueError:
+        return False
 
 
-def setup_browser_profile(browser_profile, download_files_path):
-    browser_profile.set_preference("browser.download.folderList", 2)  # custom location
-    browser_profile.set_preference("browser.download.manager.showWhenStarting", False)
-    browser_profile.set_preference("browser.download.dir", download_files_path)
-    browser_profile.set_preference("browser.helperApps.neverAsk.saveToDisk", "text/csv")
-    return browser_profile
+def get_first_csv_link(sortiment_report_html):
+    for link_elem in sortiment_report_html.find_all("a", href=True):
+        link = str(html.unescape(link_elem["href"]))
+        if link[-3:] == "csv" and "sortiment-report" in link:
+            return link
 
 
-def login(webbrowser, email, passphrase):
-    name_field = webbrowser.find_element_by_id("frm-loginForm-loginForm-email")
-    name_field.send_keys(email)
-    pass_field = webbrowser.find_element_by_id("frm-loginForm-loginForm-password")
-    pass_field.send_keys(passphrase)
-    login_button = webbrowser.find_element_by_xpath(
-        '//*[@id="frm-loginForm-loginForm"]/fieldset/footer/button'
-    )
-    login_button.click()
+def get_formatted_dicts_from_csv(response, mapping, country, distrchan):
+    add_fields = {
+        "country": country,
+        "distrchan": distrchan,
+        "source": "heureka",
+        "timestamp": datetime.utcnow().strftime("%Y%m%d"),
+    }
+    add_dict = {v: add_fields[k] for k, v in mapping.items() if k in add_fields.keys()}
+    dict_reader = DictReader(response.text.strip().split("\n"), delimiter=",")
+    for line in dict_reader:
+        outrow = {v: line[k] for k, v in mapping.items() if k in line.keys()}
+        yield {**outrow, **add_dict}
 
 
-def generate_new_sortiment_report(webbrowser):
+def write_response_to_csv(response, mapping, filename, country, distrchan):
+    with open(filename, "wt") as outfile:
+        dict_writer = DictWriter(
+            outfile, fieldnames=list(mapping.values()), extrasaction="ignore"
+        )
+        dict_writer.writeheader()
+        for line in get_formatted_dicts_from_csv(response, mapping, country, distrchan):
+            dict_writer.writerow(line)
+
+
+def main():
+    logging.basicConfig(
+        level=logging.DEBUG, handlers=[]
+    )  # do not create default stdout handler
+    logger = logging.getLogger()
+
     try:
-        generate_report_button = webbrowser.find_element_by_xpath(
-            '//*[@id="right"]/table[1]/tbody/tr[2]/td[3]/button'
+        logging_gelf_handler = logging_gelf.handlers.GELFTCPSocketHandler(
+            host=os.getenv("KBC_LOGGER_ADDR"), port=int(os.getenv("KBC_LOGGER_PORT"))
         )
-        generate_report_button.click()
-    except NoSuchElementException:
-        logger.error(
-            "Generate report button is not visible. It might have been clicked recently."
-        )
-    else:
-        webbrowser.switch_to.alert.accept()
+    except TypeError:
+        logging_gelf_handler = logging.StreamHandler()
 
-
-logging.basicConfig(
-    level=logging.DEBUG, handlers=[]
-)  # do not create default stdout handler
-logger = logging.getLogger()
-
-try:
-    logging_gelf_handler = logging_gelf.handlers.GELFTCPSocketHandler(
-        host=os.getenv("KBC_LOGGER_ADDR"), port=int(os.getenv("KBC_LOGGER_PORT"))
+    logging_gelf_handler.setFormatter(
+        logging_gelf.formatters.GELFFormatter(null_character=True)
     )
-except TypeError:
-    logging_gelf_handler = logging.StreamHandler()
+    logger.addHandler(logging_gelf_handler)
+    logger.setLevel(logging.INFO)
 
-logging_gelf_handler.setFormatter(
-    logging_gelf.formatters.GELFFormatter(null_character=True)
-)
-logger.addHandler(logging_gelf_handler)
-logger.setLevel(logging.INFO)
+    datadir = os.getenv("KBC_DATADIR", "/data/")
+    conf = docker.Config(datadir)
 
-OUTCOLS = ["material", "country", "distrchan", "source", "cse_id", "category_name"]
-version = os.getenv("VERSION_TAG")
-datadir = os.getenv("KBC_DATADIR", "/data/")
-download_path = f"{datadir}in/files/"
-results_path = f'{os.getenv("KBC_DATADIR")}out/tables/results.csv'
-conf = docker.Config(datadir)
+    params = conf.get_parameters()
+    logger.info("Extracted parameters.")
+    login_url = params.get("login_url")
+    login_user = params.get("login_user")
+    login_pass = params.get("#login_pass")
+    country = params.get("country")
+    distrchan = params.get("distrchan")
+    output_files_settings = params.get("output_files_settings")
 
-params = conf.get_parameters()
-logger.info("Extracted parameters.")
-logger.info(f"Version: {version}")
+    url_report = f"https://sluzby.heureka.{country.lower()}/obchody/sortiment-report/"
 
-shops_list = list(params.keys())
+    payload = {
+        "_do": "loginForm-loginForm-submit",
+        "email": login_user,
+        "password": login_pass,
+    }
 
-for shop in shops_list:
-    login_url = params[shop]["login_url"]
-    username = params[shop]["username"]
-    password = params[shop]["#password"]
-    sortiment_report_url = params[shop]["sortiment_report_url"]
-    country = params[shop]["country"]
-    distrchan = params[shop]["distrchan"]
-    colnames_mapping = params[shop]["colnames_mapping"]
+    with requests.Session() as session:
+        login_response = session.post(login_url, data=payload)
+        if login_response.status_code // 100 != 2:
+            logger.error("Failed to log in.")
+        report_response = session.get(url_report)
+        if report_response.status_code // 100 != 2:
+            logger.error("Failed to get to report page.")
+        soup = BeautifulSoup(report_response.text, "html.parser")
+        text = soup.find_all("td")[3]
+        logger.info("Checking if report is generating.")
+        current_report_is_generating = check_report_generation(text)
+        if current_report_is_generating is False:
+            logger.info("Getting url for new report.")
+            report_dict = extract_report_url_dict(text)
+            current_report_url = f"{url_report}?s={report_dict['s']}&d={report_dict['d']}&l={report_dict['l']}"
+            report_generation_request = session.get(current_report_url)
+            if report_generation_request.status_code // 100 != 2:
+                logger.error("Failed to generate new report.")
+        report_page = session.get(url_report)
+        if report_page.status_code // 100 != 2:
+            logger.error("Failed to get to report page.")
+        report_soup = BeautifulSoup(report_page.text, "html.parser")
+        logger.info("Getting last available report url.")
+        last_report_url = get_first_csv_link(report_soup)
+        logger.info("Downloading last available report.")
+        last_report = session.get(last_report_url)
+        if last_report.status_code // 100 != 2:
+            logger.error("Failed to download last report.")
 
-    os.makedirs(download_path, exist_ok=True)
-
-    profile = setup_browser_profile(webdriver.FirefoxProfile(), download_path)
-    opts = FirefoxOptions()
-    opts.add_argument("--headless")
-    driver = webdriver.Firefox(
-        firefox_profile=profile,
-        options=opts,
-        service_log_path=f"{datadir}out/files/geckodriver.log",
-        executable_path="/usr/local/bin/geckodriver",
-    )
-
-    with browser_handler(driver) as browser:
-        logging.info(f"Going to {login_url}")
-        browser.get(login_url)
-
-        logger.info("Logging in.")
-        login(browser, email=username, passphrase=password)
-
-        logger.info("Going to sortiment report page.")
-        browser.get(sortiment_report_url)
-
-        generate_new_sortiment_report(browser)
-
-        latest_csv_download_button = browser.find_element_by_xpath(
-            '//*[@id="right"]/table[2]/tbody/tr[2]/td[3]/a[2]'
+    logger.info("Writing csvs.")
+    for filename, columns_mapping in output_files_settings.items():
+        logger.info(f"Processing file: {filename}")
+        write_response_to_csv(
+            response=last_report,
+            mapping=columns_mapping,
+            filename=f"{datadir}out/tables/{filename}",
+            country=country,
+            distrchan=distrchan,
         )
-        logger.info("Clicking download.")
-        # without resizing, the button is not accessible in headless mode
-        browser.set_window_size(1280, 1024)
-        # wait for download button to be accessible
-        time.sleep(2)
-        latest_csv_download_button.click()
-        time.sleep(2)
 
-    for file in os.listdir(download_path):
-        logger.info(f"Processing file {file}")
-        result_file_existed = os.path.isfile(results_path)
-        with open(f"{download_path}{file}", "r") as infile, open(
-            results_path, "a+"
-        ) as outfile:
-            dict_reader = csv.DictReader(infile)
-            dict_writer = csv.DictWriter(
-                outfile, fieldnames=OUTCOLS, extrasaction="ignore"
-            )
-            if not result_file_existed:
-                dict_writer.writeheader()
-            for line in dict_reader:
-                line_renamed = {
-                    colnames_mapping.get(key, key): val for key, val in line.items()
-                }
-                dict_writer.writerow(
-                    {
-                        **line_renamed,
-                        "country": country,
-                        "distrchan": distrchan,
-                        "source": "heureka",
-                    }
-                )
+    logger.info("Done.")
 
-    # delete downloaded file to avoid duplicate processing
-    shutil.rmtree(download_path, ignore_errors=True)
+
+if __name__ == "__main__":
+    main()
