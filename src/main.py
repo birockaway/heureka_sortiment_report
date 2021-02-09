@@ -52,7 +52,7 @@ def get_first_csv_link(sortiment_report_html):
             return link
 
 
-def get_formatted_dicts_from_csv(response, mapping, country, distrchan):
+def get_formatted_dicts_from_csv(filename, mapping, country, distrchan):
     add_fields = {
         "country": country,
         "distrchan": distrchan,
@@ -60,19 +60,22 @@ def get_formatted_dicts_from_csv(response, mapping, country, distrchan):
         "timestamp": datetime.utcnow().strftime("%Y%m%d"),
     }
     add_dict = {v: add_fields[k] for k, v in mapping.items() if k in add_fields.keys()}
-    dict_reader = DictReader(response.text.strip().split("\n"), delimiter=",")
-    for line in dict_reader:
-        outrow = {v: line[k] for k, v in mapping.items() if k in line.keys()}
-        yield {**outrow, **add_dict}
+    with open(filename, "rt") as infile:
+        dict_reader = DictReader(infile, delimiter=",")
+        for line in dict_reader:
+            outrow = {v: line[k] for k, v in mapping.items() if k in line.keys()}
+            yield {**outrow, **add_dict}
 
 
-def write_response_to_csv(response, mapping, filename, country, distrchan):
-    with open(filename, "wt") as outfile:
+def write_response_to_csv(in_filename, mapping, out_filename, country, distrchan):
+    with open(out_filename, "wt") as outfile:
         dict_writer = DictWriter(
             outfile, fieldnames=list(mapping.values()), extrasaction="ignore"
         )
         dict_writer.writeheader()
-        for line in get_formatted_dicts_from_csv(response, mapping, country, distrchan):
+        for line in get_formatted_dicts_from_csv(
+            in_filename, mapping, country, distrchan
+        ):
             dict_writer.writerow(line)
 
 
@@ -140,17 +143,20 @@ def main():
         logger.info("Getting last available report url.")
         last_report_url = get_first_csv_link(report_soup)
         logger.info("Downloading last available report.")
-        last_report = session.get(last_report_url, stream=True)
-        if last_report.status_code // 100 != 2:
-            logger.error("Failed to download last report.")
+        tempfile_name = f"{datadir}in/tables/temp.csv"
+        with session.get(last_report_url, stream=True) as r:
+            r.raise_for_status()
+            with open(tempfile_name, "wb") as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
 
     logger.info("Writing csvs.")
     for filename, columns_mapping in output_files_settings.items():
         logger.info(f"Processing file: {filename}")
         write_response_to_csv(
-            response=last_report,
+            in_filename=tempfile_name,
             mapping=columns_mapping,
-            filename=f"{datadir}out/tables/{filename}",
+            out_filename=f"{datadir}out/tables/{filename}",
             country=country,
             distrchan=distrchan,
         )
