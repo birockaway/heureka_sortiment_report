@@ -140,7 +140,7 @@ def main():
         logger.info("Getting last available report url.")
         last_report_url = get_first_csv_link(report_soup)
         logger.info("Downloading last available report.")
-        last_report = session.get(last_report_url)
+        last_report = session.get(last_report_url, stream=True)
         if last_report.status_code // 100 != 2:
             logger.error("Failed to download last report.")
 
