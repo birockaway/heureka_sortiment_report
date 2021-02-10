@@ -10,6 +10,8 @@ from csv import DictReader, DictWriter
 from datetime import datetime
 
 import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 import logging_gelf.formatters
 import logging_gelf.handlers
 from keboola import docker
@@ -119,7 +121,12 @@ def main():
     }
 
     with requests.Session() as session:
-        login_response = session.post(login_url, data=payload)
+        retries = Retry(
+            total=3, backoff_factor=0.3, status_forcelist=(500, 501, 502, 503, 504)
+        )
+        session.mount("https://", HTTPAdapter(max_retries=retries))
+        session.mount("http://", HTTPAdapter(max_retries=retries))
+        login_response = session.post(login_url, data=payload, timeout=5)
         if login_response.status_code // 100 != 2:
             logger.error("Failed to log in.")
         report_response = session.get(url_report)
