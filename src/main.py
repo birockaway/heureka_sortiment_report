@@ -122,7 +122,7 @@ def main():
 
     with requests.Session() as session:
         retries = Retry(
-            total=3, backoff_factor=0.3, status_forcelist=(500, 501, 502, 503, 504)
+            total=3, backoff_factor=0, status_forcelist=(500, 501, 502, 503, 504)
         )
         session.mount("https://", HTTPAdapter(max_retries=retries))
         session.mount("http://", HTTPAdapter(max_retries=retries))
@@ -140,10 +140,10 @@ def main():
             logger.info("Getting url for new report.")
             report_dict = extract_report_url_dict(text)
             current_report_url = f"{url_report}?s={report_dict['s']}&d={report_dict['d']}&l={report_dict['l']}"
-            report_generation_request = session.get(current_report_url)
+            report_generation_request = session.get(current_report_url, timeout=120)
             if report_generation_request.status_code // 100 != 2:
                 logger.error("Failed to generate new report.")
-        report_page = session.get(url_report)
+        report_page = session.get(url_report, timeout=30)
         if report_page.status_code // 100 != 2:
             logger.error("Failed to get to report page.")
         report_soup = BeautifulSoup(report_page.text, "html.parser")
@@ -151,7 +151,7 @@ def main():
         last_report_url = get_first_csv_link(report_soup)
         logger.info("Downloading last available report.")
         tempfile_name = f"{datadir}in/tables/temp.csv"
-        with session.get(last_report_url, stream=True) as r:
+        with session.get(last_report_url, stream=True, timeout=120) as r:
             r.raise_for_status()
             with open(tempfile_name, "wb") as f:
                 for chunk in r.iter_content(chunk_size=8192):
